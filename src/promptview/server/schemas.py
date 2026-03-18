@@ -1,7 +1,7 @@
 """Pydantic schemas for the API."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
@@ -101,3 +101,43 @@ class UpdatePromptRequest(BaseModel):
 
 class CommitRequest(BaseModel):
     message: str
+
+
+class TestCaseCreate(BaseModel):
+    input: str
+    expected_output: Optional[str] = None
+    tags: Optional[List[str]] = []
+
+
+class TestCaseResponse(BaseModel):
+    id: str
+    prompt_id: str
+    input: str
+    expected_output: Optional[str]
+    tags: List[str]
+    created_at: str
+
+
+class EvalRequest(BaseModel):
+    version_id: Optional[str] = None
+    dataset_path: Optional[str] = None
+    inline_cases: Optional[List[dict]] = None
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    use_judge: Optional[bool] = False
+    judge_criteria: Optional[List[str]] = None
+
+
+class EvalRunResponse(BaseModel):
+    id: str
+    prompt_id: str
+    version_id: str
+    source: str
+    run_at: str
+    total_cases: int
+    passed: int
+    pass_rate: float
+    avg_latency_ms: float
+    avg_cost_usd: float
+    avg_judge_score: Optional[float]

@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from .models import (
-    Commit, Prompt, PromptBlock, PromptComponent, PromptRole, PromptSource, PromptVersion,
+    Commit, EvalResult, EvalRun, Prompt, PromptBlock, PromptComponent, PromptRole,
+    PromptSource, PromptVersion, TestCase,
 )
 
 SCHEMA = """
@@ -60,6 +61,46 @@ CREATE TABLE IF NOT EXISTS prompt_components (
     content    TEXT NOT NULL,
     position   INTEGER NOT NULL,
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS test_cases (
+  id              TEXT PRIMARY KEY,
+  prompt_id       TEXT NOT NULL REFERENCES prompts(id) ON DELETE CASCADE,
+  input           TEXT NOT NULL,
+  expected_output TEXT,
+  tags            TEXT DEFAULT '[]',
+  created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eval_runs (
+  id              TEXT PRIMARY KEY,
+  prompt_id       TEXT NOT NULL REFERENCES prompts(id),
+  version_id      TEXT NOT NULL REFERENCES prompt_versions(id),
+  source          TEXT NOT NULL DEFAULT 'local',
+  run_at          TEXT NOT NULL,
+  dataset_path    TEXT,
+  provider        TEXT,
+  model           TEXT,
+  total_cases     INTEGER DEFAULT 0,
+  passed          INTEGER DEFAULT 0,
+  avg_latency_ms  REAL DEFAULT 0,
+  avg_cost_usd    REAL DEFAULT 0,
+  avg_judge_score REAL,
+  custom_metrics  TEXT DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS eval_results (
+  id               TEXT PRIMARY KEY,
+  eval_run_id      TEXT NOT NULL REFERENCES eval_runs(id) ON DELETE CASCADE,
+  test_case_id     TEXT REFERENCES test_cases(id),
+  actual_output    TEXT,
+  passed           INTEGER DEFAULT 0,
+  similarity_score REAL,
+  judge_score      REAL,
+  judge_reasoning  TEXT,
+  latency_ms       REAL,
+  tokens_used      INTEGER,
+  cost_usd         REAL
 );
 """
 
@@ -322,4 +363,122 @@ class Database:
             content=row["content"],
             position=row["position"],
             created_at=_parse(row["created_at"]),
+        )
+
+    # ---- TestCases ----
+
+    def create_test_case(self, tc: TestCase) -> TestCase:
+        self._conn.execute(
+            """INSERT INTO test_cases (id, prompt_id, input, expected_output, tags, created_at)
+               VALUES (?,?,?,?,?,?)""",
+            (tc.id, tc.prompt_id, tc.input, tc.expected_output,
+             json.dumps(tc.tags), tc.created_at),
+        )
+        self._conn.commit()
+        return tc
+
+    def list_test_cases(self, prompt_id: str) -> list:
+        rows = self._conn.execute(
+            "SELECT * FROM test_cases WHERE prompt_id=? ORDER BY created_at",
+            (prompt_id,),
+        ).fetchall()
+        return [self._row_to_test_case(r) for r in rows]
+
+    def delete_test_case(self, tc_id: str) -> None:
+        self._conn.execute("DELETE FROM test_cases WHERE id=?", (tc_id,))
+        self._conn.commit()
+
+    def _row_to_test_case(self, row: sqlite3.Row) -> TestCase:
+        return TestCase(
+            id=row["id"],
+            prompt_id=row["prompt_id"],
+            input=row["input"],
+            expected_output=row["expected_output"],
+            tags=json.loads(row["tags"] or "[]"),
+            created_at=row["created_at"],
+        )
+
+    # ---- EvalRuns ----
+
+    def create_eval_run(self, run: EvalRun) -> EvalRun:
+        self._conn.execute(
+            """INSERT INTO eval_runs
+               (id, prompt_id, version_id, source, run_at, dataset_path, provider, model,
+                total_cases, passed, avg_latency_ms, avg_cost_usd, avg_judge_score, custom_metrics)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (run.id, run.prompt_id, run.version_id, run.source, run.run_at,
+             run.dataset_path, run.provider, run.model,
+             run.total_cases, run.passed, run.avg_latency_ms, run.avg_cost_usd,
+             run.avg_judge_score, json.dumps(run.custom_metrics)),
+        )
+        self._conn.commit()
+        return run
+
+    def list_eval_runs(self, prompt_id: str) -> list:
+        rows = self._conn.execute(
+            "SELECT * FROM eval_runs WHERE prompt_id=? ORDER BY run_at",
+            (prompt_id,),
+        ).fetchall()
+        return [self._row_to_eval_run(r) for r in rows]
+
+    def get_eval_run(self, run_id: str):
+        row = self._conn.execute(
+            "SELECT * FROM eval_runs WHERE id=?", (run_id,)
+        ).fetchone()
+        return self._row_to_eval_run(row) if row else None
+
+    def _row_to_eval_run(self, row: sqlite3.Row) -> EvalRun:
+        return EvalRun(
+            id=row["id"],
+            prompt_id=row["prompt_id"],
+            version_id=row["version_id"],
+            source=row["source"],
+            run_at=row["run_at"],
+            dataset_path=row["dataset_path"],
+            provider=row["provider"],
+            model=row["model"],
+            total_cases=row["total_cases"] or 0,
+            passed=row["passed"] or 0,
+            avg_latency_ms=row["avg_latency_ms"] or 0.0,
+            avg_cost_usd=row["avg_cost_usd"] or 0.0,
+            avg_judge_score=row["avg_judge_score"],
+            custom_metrics=json.loads(row["custom_metrics"] or "{}"),
+        )
+
+    # ---- EvalResults ----
+
+    def create_eval_result(self, result: EvalResult) -> EvalResult:
+        self._conn.execute(
+            """INSERT INTO eval_results
+               (id, eval_run_id, test_case_id, actual_output, passed,
+                similarity_score, judge_score, judge_reasoning, latency_ms,
+                tokens_used, cost_usd)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (result.id, result.eval_run_id, result.test_case_id, result.actual_output,
+             1 if result.passed else 0,
+             result.similarity_score, result.judge_score, result.judge_reasoning,
+             result.latency_ms, result.tokens_used, result.cost_usd),
+        )
+        self._conn.commit()
+        return result
+
+    def list_eval_results(self, eval_run_id: str) -> list:
+        rows = self._conn.execute(
+            "SELECT * FROM eval_results WHERE eval_run_id=?", (eval_run_id,)
+        ).fetchall()
+        return [self._row_to_eval_result(r) for r in rows]
+
+    def _row_to_eval_result(self, row: sqlite3.Row) -> EvalResult:
+        return EvalResult(
+            id=row["id"],
+            eval_run_id=row["eval_run_id"],
+            test_case_id=row["test_case_id"],
+            actual_output=row["actual_output"] or "",
+            passed=bool(row["passed"]),
+            similarity_score=row["similarity_score"],
+            judge_score=row["judge_score"],
+            judge_reasoning=row["judge_reasoning"],
+            latency_ms=row["latency_ms"] or 0.0,
+            tokens_used=row["tokens_used"] or 0,
+            cost_usd=row["cost_usd"] or 0.0,
         )

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from enum import Enum
 import uuid
 
@@ -152,3 +152,107 @@ class IndexEntry:
     version_id: str
     staged_at: datetime
     change_type: str  # "added" | "modified" | "deleted"
+
+
+@dataclass
+class TestCase:
+    id: str
+    prompt_id: str
+    input: str
+    expected_output: Optional[str]
+    tags: List[str]
+    created_at: str
+
+    @classmethod
+    def new(
+        cls,
+        prompt_id: str,
+        input: str,
+        expected_output: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> "TestCase":
+        import uuid as _uuid
+        import datetime as _dt
+        return cls(
+            id=str(_uuid.uuid4()),
+            prompt_id=prompt_id,
+            input=input,
+            expected_output=expected_output,
+            tags=tags or [],
+            created_at=_dt.datetime.utcnow().isoformat(),
+        )
+
+
+@dataclass
+class EvalRun:
+    id: str
+    prompt_id: str
+    version_id: str
+    source: str  # 'local' | 'langfuse' | 'langsmith'
+    run_at: str
+    dataset_path: Optional[str]
+    provider: Optional[str]
+    model: Optional[str]
+    total_cases: int
+    passed: int
+    avg_latency_ms: float
+    avg_cost_usd: float
+    avg_judge_score: Optional[float]
+    custom_metrics: Dict[str, Any]
+
+    @property
+    def pass_rate(self) -> float:
+        return (self.passed / self.total_cases * 100) if self.total_cases > 0 else 0.0
+
+    @classmethod
+    def new(cls, prompt_id: str, version_id: str, source: str = "local", **kwargs) -> "EvalRun":
+        import uuid as _uuid
+        import datetime as _dt
+        return cls(
+            id=str(_uuid.uuid4()),
+            prompt_id=prompt_id,
+            version_id=version_id,
+            source=source,
+            run_at=_dt.datetime.utcnow().isoformat(),
+            dataset_path=kwargs.get("dataset_path"),
+            provider=kwargs.get("provider"),
+            model=kwargs.get("model"),
+            total_cases=0,
+            passed=0,
+            avg_latency_ms=0.0,
+            avg_cost_usd=0.0,
+            avg_judge_score=None,
+            custom_metrics={},
+        )
+
+
+@dataclass
+class EvalResult:
+    id: str
+    eval_run_id: str
+    test_case_id: Optional[str]
+    actual_output: str
+    passed: bool
+    similarity_score: Optional[float]
+    judge_score: Optional[float]
+    judge_reasoning: Optional[str]
+    latency_ms: float
+    tokens_used: int
+    cost_usd: float
+
+    @classmethod
+    def new(cls, eval_run_id: str, actual_output: str, passed: bool, **kwargs) -> "EvalResult":
+        import uuid as _uuid
+        return cls(
+            id=str(_uuid.uuid4()),
+            eval_run_id=eval_run_id,
+            test_case_id=kwargs.get("test_case_id"),
+            actual_output=actual_output,
+            passed=passed,
+            similarity_score=kwargs.get("similarity_score"),
+            judge_score=kwargs.get("judge_score"),
+            judge_reasoning=kwargs.get("judge_reasoning"),
+            latency_ms=kwargs.get("latency_ms", 0.0),
+            tokens_used=kwargs.get("tokens_used", 0),
+            cost_usd=kwargs.get("cost_usd", 0.0),
+        )

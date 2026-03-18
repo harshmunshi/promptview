@@ -141,3 +141,26 @@ class EvalRunResponse(BaseModel):
     avg_latency_ms: float
     avg_cost_usd: float
     avg_judge_score: Optional[float]
+
+
+# ── Branch schemas ─────────────────────────────────────────────────────────────
+
+class BranchCreate(BaseModel):
+    name: str
+    from_version_id: Optional[str] = None
+
+
+class BranchResponse(BaseModel):
+    id: str
+    name: str
+    prompt_id: str
+    head_version_id: Optional[str]
+    base_version_id: Optional[str]
+    is_default: bool
+    created_at: str
+    merged_at: Optional[str]
+
+
+class MergeRequest(BaseModel):
+    source: str
+    target: str = "main"

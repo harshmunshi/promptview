@@ -9,8 +9,8 @@ from typing import Optional
 from .db import Database
 from .diff_engine import compute_diff
 from .models import (
-    Commit, IndexEntry, Prompt, PromptBlock, PromptRole, PromptSource,
-    PromptVersion,
+    Commit, IndexEntry, Prompt, PromptBlock, PromptBranch, PromptRole,
+    PromptSource, PromptVersion,
 )
 from ..exceptions import NotInitializedError, PromptNotFoundError
 
@@ -361,6 +361,107 @@ class PromptRepository:
             "modified": modified,
             "untracked": untracked,
         }
+
+    # ---- Branches ----
+
+    def list_branches(self, prompt_id: str) -> list[PromptBranch]:
+        return self.db.list_branches(prompt_id)
+
+    def create_branch(
+        self,
+        prompt_id: str,
+        name: str,
+        from_version_id: Optional[str] = None,
+    ) -> PromptBranch:
+        """Create a new branch from the given version (or latest if not specified)."""
+        if from_version_id is None:
+            latest = self.db.get_latest_version(prompt_id)
+            from_version_id = latest.id if latest else None
+        branch = PromptBranch.new(
+            name=name,
+            prompt_id=prompt_id,
+            base_version_id=from_version_id,
+            is_default=(name == "main"),
+        )
+        return self.db.create_branch(branch)
+
+    def delete_branch(self, prompt_id: str, name: str) -> None:
+        """Delete a branch by name. Raises ValueError if not found."""
+        branch = self.db.get_branch(prompt_id, name)
+        if branch is None:
+            raise ValueError(f"Branch '{name}' not found for prompt {prompt_id}")
+        self.db.delete_branch(branch.id)
+
+    def merge_branch(
+        self,
+        prompt_id: str,
+        source_branch: str,
+        target_branch: str = "main",
+    ) -> PromptVersion:
+        """Merge source branch HEAD content into target branch as a new version."""
+        src = self.db.get_branch(prompt_id, source_branch)
+        if src is None:
+            raise ValueError(f"Source branch '{source_branch}' not found")
+        tgt = self.db.get_branch(prompt_id, target_branch)
+        if tgt is None:
+            raise ValueError(f"Target branch '{target_branch}' not found")
+        if src.head_version_id is None:
+            raise ValueError(f"Source branch '{source_branch}' has no commits")
+
+        # Fetch the content from the source branch head
+        src_version = self.db.get_version(src.head_version_id)
+        if src_version is None:
+            raise ValueError(f"Source head version not found: {src.head_version_id}")
+
+        # Create a new version on the target branch with source content
+        new_version = self.update_prompt_content(
+            prompt_id,
+            src_version.raw_content,
+            blocks=src_version.blocks,
+        )
+        # Advance the target branch HEAD to the new version
+        self.db.update_branch_head(tgt.id, new_version.id)
+        # Mark the source branch as merged
+        self.db.mark_branch_merged(src.id)
+        return new_version
+
+    def get_current_branch(self, prompt_id: str) -> str:
+        """Return the active branch name for a prompt (reads config.toml)."""
+        cfg = self.get_config()
+        return cfg.get("branches", {}).get(f"prompt_{prompt_id}", "main")
+
+    def set_current_branch(self, prompt_id: str, branch_name: str) -> None:
+        """Write the active branch for a prompt into config.toml."""
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib  # type: ignore
+        import tomli_w
+
+        if self.config_path.exists():
+            with open(self.config_path, "rb") as f:
+                cfg = tomllib.load(f)
+        else:
+            cfg = {}
+
+        if "branches" not in cfg:
+            cfg["branches"] = {}
+        cfg["branches"][f"prompt_{prompt_id}"] = branch_name
+        self.config_path.write_bytes(tomli_w.dumps(cfg).encode())
+
+    def ensure_main_branch(self, prompt_id: str) -> PromptBranch:
+        """Create 'main' branch if it doesn't exist. Called on init/scan."""
+        existing = self.db.get_branch(prompt_id, "main")
+        if existing is not None:
+            return existing
+        latest = self.db.get_latest_version(prompt_id)
+        branch = PromptBranch.new(
+            name="main",
+            prompt_id=prompt_id,
+            base_version_id=latest.id if latest else None,
+            is_default=True,
+        )
+        return self.db.create_branch(branch)
 
     @classmethod
     def find_root(cls, start: Optional[Path] = None) -> Path:

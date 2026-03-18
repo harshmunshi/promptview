@@ -123,6 +123,15 @@ svg#graph{width:100%;height:100%}
 .spinner{width:14px;height:14px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── Branch bar ──────────────────────────── */
+#branch-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:0 0 2px 0}
+#branch-label{font-size:10px;color:#8b949e;white-space:nowrap}
+#branch-select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:3px 8px;border-radius:4px;font-size:11px;font-family:inherit;cursor:pointer;max-width:160px}
+#branch-select:focus{outline:none;border-color:#58a6ff}
+.branch-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.branch-btn{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s}
+.branch-btn:hover{border-color:#58a6ff;color:#58a6ff;background:#1c2d5a}
+
 /* ── Tab switcher ────────────────────────── */
 #tab-bar{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid #30363d;background:#161b22;flex-shrink:0}
 .tab-btn{padding:7px 14px;font-size:12px;font-family:inherit;background:none;border:none;border-bottom:2px solid transparent;color:#8b949e;cursor:pointer;transition:all .15s;white-space:nowrap}
@@ -191,7 +200,15 @@ svg#graph{width:100%;height:100%}
           <button class="btn success" id="save-btn" style="display:none" onclick="saveComponents()">💾 Save &amp; Regenerate</button>
         </div>
       </div>
-      <!-- Row 2: version pills -->
+      <!-- Row 2: branch bar -->
+      <div id="branch-bar">
+        <span class="branch-dot" id="branch-dot" style="background:#3fb950"></span>
+        <span id="branch-label">Branch:</span>
+        <select id="branch-select" onchange="onBranchChange(this.value)"></select>
+        <button class="branch-btn" onclick="openCreateBranchModal()" title="Create new branch">+ Branch</button>
+        <button class="branch-btn" onclick="openMergeBranchModal()" title="Merge a branch">⇒ Merge</button>
+      </div>
+      <!-- Row 3: version pills -->
       <div id="graph-header-versions" style="display:none">
         <span id="versions-label">Versions:</span>
         <div id="version-pills" style="display:flex;gap:4px;flex-wrap:wrap"></div>
@@ -295,6 +312,8 @@ let components = [];           // working copy of components for currentVersionI
 let editingIndex = null;
 let dirty = false;
 let llmConfig = null;          // {provider, api_key, model}
+let allBranches = [];          // branches for selected prompt
+let currentBranch = 'main';   // active branch name
 
 // Restore LLM config from localStorage
 (function(){
@@ -357,6 +376,9 @@ async function selectPrompt(id){
   } catch(e) {
     allVersions = [];
   }
+
+  // Load branches
+  await loadBranches(id);
 
   // Default to the latest version
   currentVersionId = allVersions.length ? allVersions[allVersions.length - 1].id : null;
@@ -1181,6 +1203,145 @@ async function submitRunEval(){
     showToast(e.message, true);
   } finally {
     if(btn) { btn.disabled = false; btn.innerHTML = 'Run'; }
+  }
+}
+
+// ─── Branches ─────────────────────────────────────────────────────────────────
+
+async function loadBranches(promptId){
+  try {
+    allBranches = await api(`/api/prompts/${promptId}/branches`);
+    const resp = await api(`/api/prompts/${promptId}/branches/current`);
+    currentBranch = resp.branch || 'main';
+  } catch(e){
+    allBranches = [];
+    currentBranch = 'main';
+  }
+  renderBranchBar();
+}
+
+function renderBranchBar(){
+  const bar = document.getElementById('branch-bar');
+  const sel = document.getElementById('branch-select');
+  const dot = document.getElementById('branch-dot');
+
+  if(!selectedPromptId){ bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+
+  // Populate select options
+  sel.innerHTML = allBranches.length
+    ? allBranches.map(b => {
+        const isActive = b.name === currentBranch;
+        const mergedLabel = b.merged_at ? ' (merged)' : '';
+        return `<option value="${escHtml(b.name)}"${isActive?' selected':''}>${escHtml(b.name)}${mergedLabel}</option>`;
+      }).join('')
+    : `<option value="main">main</option>`;
+
+  // Dot color: green=main, blue=feature, gray=merged
+  const activeBranch = allBranches.find(b => b.name === currentBranch);
+  if(!activeBranch || activeBranch.merged_at){
+    dot.style.background = '#8b949e';
+  } else if(currentBranch === 'main'){
+    dot.style.background = '#3fb950';
+  } else {
+    dot.style.background = '#58a6ff';
+  }
+}
+
+async function onBranchChange(branchName){
+  if(!selectedPromptId || branchName === currentBranch) return;
+  try {
+    await api(`/api/prompts/${selectedPromptId}/branches/${encodeURIComponent(branchName)}/checkout`, 'POST');
+    currentBranch = branchName;
+    renderBranchBar();
+    showToast(`Switched to branch '${branchName}'`);
+  } catch(e){
+    showToast(e.message, true);
+    // Revert the select to the previous value
+    renderBranchBar();
+  }
+}
+
+function openCreateBranchModal(){
+  if(!selectedPromptId){ showToast('Select a prompt first', true); return; }
+  document.getElementById('modal-title').textContent = 'Create Branch';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-group"><label>Branch name</label>
+      <input id="new-branch-name" placeholder="e.g. experiment-v2"/>
+    </div>
+    <div class="form-group"><label>From version <span style="color:#8b949e">(leave blank for latest)</span></label>
+      <select id="new-branch-version">
+        <option value="">Latest</option>
+        ${[...allVersions].reverse().map(v=>`<option value="${v.id}">v${v.version_number}${v.commit_id?'':' (staged)'}</option>`).join('')}
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="submitCreateBranch()">Create</button>
+    </div>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('new-branch-name').focus(), 50);
+}
+
+async function submitCreateBranch(){
+  const name = document.getElementById('new-branch-name').value.trim();
+  const fromVersionId = document.getElementById('new-branch-version').value || null;
+  if(!name){ showToast('Branch name required', true); return; }
+  try {
+    const b = await api(`/api/prompts/${selectedPromptId}/branches`, 'POST', {
+      name, from_version_id: fromVersionId,
+    });
+    allBranches.push(b);
+    closeModal();
+    showToast(`Created branch '${name}'`);
+    renderBranchBar();
+  } catch(e){
+    showToast(e.message, true);
+  }
+}
+
+function openMergeBranchModal(){
+  if(!selectedPromptId){ showToast('Select a prompt first', true); return; }
+  const nonMainBranches = allBranches.filter(b => b.name !== 'main' && !b.merged_at);
+  document.getElementById('modal-title').textContent = 'Merge Branch';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-group"><label>Source branch (to merge from)</label>
+      <select id="merge-source">
+        ${nonMainBranches.length
+          ? nonMainBranches.map(b=>`<option value="${escHtml(b.name)}">${escHtml(b.name)}</option>`).join('')
+          : '<option value="" disabled>No branches to merge</option>'}
+      </select>
+    </div>
+    <div class="form-group"><label>Target branch (to merge into)</label>
+      <select id="merge-target">
+        ${allBranches.map(b=>`<option value="${escHtml(b.name)}"${b.name==='main'?' selected':''}>${escHtml(b.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="submitMergeBranch()" ${!nonMainBranches.length?'disabled':''}>Merge</button>
+    </div>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function submitMergeBranch(){
+  const source = document.getElementById('merge-source').value;
+  const target = document.getElementById('merge-target').value;
+  if(!source){ showToast('Select a source branch', true); return; }
+  if(source === target){ showToast('Source and target must differ', true); return; }
+  try {
+    const r = await api(`/api/prompts/${selectedPromptId}/branches/merge`, 'POST', {source, target});
+    closeModal();
+    showToast(`Merged '${source}' into '${target}' → v${r.new_version_number}`);
+    // Reload versions and branches
+    allVersions = await api(`/api/prompts/${selectedPromptId}/versions`);
+    renderVersionPills();
+    await loadBranches(selectedPromptId);
+    await loadPrompts();
+  } catch(e){
+    showToast(e.message, true);
   }
 }
 

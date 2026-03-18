@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from .models import (
-    Commit, EvalResult, EvalRun, Prompt, PromptBlock, PromptComponent, PromptRole,
-    PromptSource, PromptVersion, TestCase,
+    Commit, EvalResult, EvalRun, Prompt, PromptBlock, PromptBranch, PromptComponent,
+    PromptRole, PromptSource, PromptVersion, TestCase,
 )
 
 SCHEMA = """
@@ -101,6 +101,18 @@ CREATE TABLE IF NOT EXISTS eval_results (
   latency_ms       REAL,
   tokens_used      INTEGER,
   cost_usd         REAL
+);
+
+CREATE TABLE IF NOT EXISTS prompt_branches (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  prompt_id       TEXT NOT NULL REFERENCES prompts(id) ON DELETE CASCADE,
+  base_version_id TEXT REFERENCES prompt_versions(id),
+  head_version_id TEXT REFERENCES prompt_versions(id),
+  is_default      INTEGER DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  merged_at       TEXT,
+  UNIQUE(prompt_id, name)
 );
 """
 
@@ -481,4 +493,73 @@ class Database:
             latency_ms=row["latency_ms"] or 0.0,
             tokens_used=row["tokens_used"] or 0,
             cost_usd=row["cost_usd"] or 0.0,
+        )
+
+    # ---- PromptBranches ----
+
+    def create_branch(self, branch: PromptBranch) -> PromptBranch:
+        self._conn.execute(
+            """INSERT INTO prompt_branches
+               (id, name, prompt_id, base_version_id, head_version_id, is_default, created_at, merged_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (branch.id, branch.name, branch.prompt_id,
+             branch.base_version_id, branch.head_version_id,
+             1 if branch.is_default else 0,
+             branch.created_at, branch.merged_at),
+        )
+        self._conn.commit()
+        return branch
+
+    def list_branches(self, prompt_id: str) -> list[PromptBranch]:
+        rows = self._conn.execute(
+            "SELECT * FROM prompt_branches WHERE prompt_id=? ORDER BY created_at",
+            (prompt_id,),
+        ).fetchall()
+        return [self._row_to_branch(r) for r in rows]
+
+    def get_branch(self, prompt_id: str, name: str) -> Optional[PromptBranch]:
+        row = self._conn.execute(
+            "SELECT * FROM prompt_branches WHERE prompt_id=? AND name=?",
+            (prompt_id, name),
+        ).fetchone()
+        return self._row_to_branch(row) if row else None
+
+    def get_branch_by_id(self, branch_id: str) -> Optional[PromptBranch]:
+        row = self._conn.execute(
+            "SELECT * FROM prompt_branches WHERE id=?",
+            (branch_id,),
+        ).fetchone()
+        return self._row_to_branch(row) if row else None
+
+    def update_branch_head(self, branch_id: str, head_version_id: str) -> None:
+        self._conn.execute(
+            "UPDATE prompt_branches SET head_version_id=? WHERE id=?",
+            (head_version_id, branch_id),
+        )
+        self._conn.commit()
+
+    def delete_branch(self, branch_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM prompt_branches WHERE id=?", (branch_id,)
+        )
+        self._conn.commit()
+
+    def mark_branch_merged(self, branch_id: str) -> None:
+        from datetime import datetime as _dt
+        self._conn.execute(
+            "UPDATE prompt_branches SET merged_at=? WHERE id=?",
+            (_dt.utcnow().isoformat(), branch_id),
+        )
+        self._conn.commit()
+
+    def _row_to_branch(self, row: sqlite3.Row) -> PromptBranch:
+        return PromptBranch(
+            id=row["id"],
+            name=row["name"],
+            prompt_id=row["prompt_id"],
+            base_version_id=row["base_version_id"],
+            head_version_id=row["head_version_id"],
+            is_default=bool(row["is_default"]),
+            created_at=row["created_at"],
+            merged_at=row["merged_at"],
         )

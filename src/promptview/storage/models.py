@@ -227,6 +227,40 @@ class EvalRun:
 
 
 @dataclass
+class PromptBranch:
+    """A named branch pointing to a version of a prompt."""
+    id: str
+    name: str
+    prompt_id: str
+    base_version_id: Optional[str]
+    head_version_id: Optional[str]
+    is_default: bool
+    created_at: str
+    merged_at: Optional[str]
+
+    @classmethod
+    def new(
+        cls,
+        name: str,
+        prompt_id: str,
+        base_version_id: Optional[str] = None,
+        is_default: bool = False,
+    ) -> "PromptBranch":
+        import uuid as _uuid
+        import datetime as _dt
+        return cls(
+            id=str(_uuid.uuid4()),
+            name=name,
+            prompt_id=prompt_id,
+            base_version_id=base_version_id,
+            head_version_id=base_version_id,
+            is_default=is_default,
+            created_at=_dt.datetime.utcnow().isoformat(),
+            merged_at=None,
+        )
+
+
+@dataclass
 class EvalResult:
     id: str
     eval_run_id: str

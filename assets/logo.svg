@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" width="420" height="120">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0f0f"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6"/>
+      <stop offset="100%" style="stop-color:#ec4899"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="420" height="120" rx="12" fill="url(#bg)"/>
+
+  <!-- Subtle grid lines -->
+  <g opacity="0.06" stroke="#6366f1" stroke-width="0.5">
+    <line x1="0" y1="20" x2="420" y2="20"/>
+    <line x1="0" y1="40" x2="420" y2="40"/>
+    <line x1="0" y1="60" x2="420" y2="60"/>
+    <line x1="0" y1="80" x2="420" y2="80"/>
+    <line x1="0" y1="100" x2="420" y2="100"/>
+    <line x1="60" y1="0" x2="60" y2="120"/>
+    <line x1="120" y1="0" x2="120" y2="120"/>
+    <line x1="180" y1="0" x2="180" y2="120"/>
+  </g>
+
+  <!-- Connector lines between nodes -->
+  <line x1="58" y1="45" x2="82" y2="45" stroke="#6366f1" stroke-width="2" opacity="0.8"/>
+  <line x1="98" y1="45" x2="122" y2="45" stroke="#6366f1" stroke-width="2" opacity="0.8"/>
+  <line x1="138" y1="45" x2="162" y2="45" stroke="#6366f1" stroke-width="2" opacity="0.6"/>
+
+  <!-- Arrow heads -->
+  <polygon points="82,41 90,45 82,49" fill="#6366f1" opacity="0.8"/>
+  <polygon points="122,41 130,45 122,49" fill="#6366f1" opacity="0.8"/>
+  <polygon points="162,41 170,45 162,49" fill="#6366f1" opacity="0.6"/>
+
+  <!-- Node 1 - filled circle -->
+  <circle cx="45" cy="45" r="13" fill="url(#nodeGrad2)" filter="url(#glow)"/>
+  <circle cx="45" cy="45" r="13" fill="none" stroke="#93c5fd" stroke-width="1" opacity="0.6"/>
+  <text x="45" y="50" text-anchor="middle" font-family="monospace" font-size="9" fill="white" font-weight="bold">sys</text>
+
+  <!-- Node 2 -->
+  <circle cx="90" cy="45" r="13" fill="url(#nodeGrad1)" filter="url(#glow)"/>
+  <circle cx="90" cy="45" r="13" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.6"/>
+  <text x="90" y="50" text-anchor="middle" font-family="monospace" font-size="8" fill="white" font-weight="bold">ctx</text>
+
+  <!-- Node 3 -->
+  <circle cx="135" cy="45" r="13" fill="url(#nodeGrad1)" filter="url(#glow)"/>
+  <circle cx="135" cy="45" r="13" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.6"/>
+  <text x="135" y="50" text-anchor="middle" font-family="monospace" font-size="7" fill="white" font-weight="bold">inst</text>
+
+  <!-- Node 4 - dimmer (more) -->
+  <circle cx="180" cy="45" r="13" fill="url(#nodeGrad3)" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="180" cy="45" r="13" fill="none" stroke="#c4b5fd" stroke-width="1" opacity="0.4"/>
+  <text x="180" y="50" text-anchor="middle" font-family="monospace" font-size="8" fill="white" font-weight="bold" opacity="0.8">fmt</text>
+
+  <!-- Dot indicators (more nodes exist) -->
+  <circle cx="202" cy="45" r="2.5" fill="#6366f1" opacity="0.5"/>
+  <circle cx="212" cy="45" r="2.5" fill="#6366f1" opacity="0.35"/>
+  <circle cx="222" cy="45" r="2.5" fill="#6366f1" opacity="0.2"/>
+
+  <!-- Divider -->
+  <line x1="240" y1="20" x2="240" y2="100" stroke="#6366f1" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- Wordmark -->
+  <text x="258" y="52" font-family="'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="700" fill="white" letter-spacing="-0.5" filter="url(#softglow)">prompt</text>
+  <text x="258" y="52" font-family="'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="700" fill="url(#nodeGrad1)" letter-spacing="-0.5">
+    <tspan dx="0">prompt</tspan>
+  </text>
+
+  <!-- "view" in accent color -->
+  <text x="258" y="52" font-family="'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="700" fill="white" letter-spacing="-0.5">
+    <tspan fill="white">prompt</tspan><tspan fill="#8b5cf6">view</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="258" y="72" font-family="'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="11" fill="#94a3b8" letter-spacing="0.5">git-like versioning for LLM prompts</text>
+</svg>

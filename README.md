@@ -389,6 +389,57 @@ pv sync langsmith             # push + pull in one command
 
 ---
 
+## Team Sharing (Remote Backends)
+
+Share your `.promptview/` database across machines, team members, and CI runners using a remote backend.
+
+### Setup
+
+```bash
+# Register a remote
+pv remote add origin s3://my-bucket/my-project/
+pv remote add origin gcs://my-bucket/my-project/
+pv remote add origin https://my-server.com/promptview/
+
+# View registered remotes
+pv remote list
+
+# Push local DB to remote
+pv push-remote origin
+
+# Pull remote DB to local (e.g. on a new machine or in CI)
+pv pull-remote origin
+```
+
+You can also pass a URL directly without registering it:
+
+```bash
+pv push-remote s3://my-bucket/my-project/
+pv pull-remote https://my-server.com/promptview/
+```
+
+### Backends
+
+| Backend | URL scheme | Extra dependency |
+|---|---|---|
+| Amazon S3 | `s3://bucket/path` | `pip install promptview[s3]` |
+| Google Cloud Storage | `gcs://bucket/path` | `pip install promptview[gcs]` |
+| HTTP/HTTPS | `https://host/path` | None (uses httpx) |
+
+### CI usage
+
+```yaml
+- name: Pull prompt DB
+  run: |
+    pip install "promptview[s3]"
+    pv pull-remote origin
+  env:
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+```
+
+---
+
 ## How It Works
 
 ```

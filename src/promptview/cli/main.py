@@ -12,7 +12,9 @@ from .commands.diff import diff_command
 from .commands.log import log_command
 from .commands.ui import ui_command
 from .commands.config import config_command
-from .commands.push import push_command
+from .commands.push import push_command, push_backend_command
+from .commands.pull_backend import pull_backend_command
+from .commands.remote import app as remote_app
 from .commands.eval import app as eval_app
 from .commands.metrics import app as metrics_app
 from .commands.branch import app as branch_app, checkout_command, merge_command
@@ -37,7 +39,10 @@ app.command("diff", help="Show changes between prompt versions")(diff_command)
 app.command("log", help="Show commit history")(log_command)
 app.command("ui", help="Start the web UI")(ui_command)
 app.command("config", help="Get or set configuration")(config_command)
-app.command("push", help="Push prompts to remote (langfuse/langsmith)")(push_command)
+app.command("push", help="Push prompts to remote (langfuse/langsmith/backend)")(push_command)
+app.command("push-remote", help="Push local .promptview DB to a remote backend (S3, GCS, HTTP)")(push_backend_command)
+app.command("pull-remote", help="Pull remote .promptview DB from a backend (S3, GCS, HTTP)")(pull_backend_command)
+app.add_typer(remote_app, name="remote")
 app.add_typer(eval_app, name="eval")
 app.add_typer(metrics_app, name="metrics")
 app.add_typer(branch_app, name="branch")

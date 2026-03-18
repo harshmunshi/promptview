@@ -685,19 +685,26 @@ function toggleFooter(){
 function openLLMModal(){
   const cur = llmConfig || {};
   document.getElementById('modal-title').textContent = '⚙ Configure LLM';
+  const isOllama = cur.provider === 'ollama';
   document.getElementById('modal-body').innerHTML = `
     <div class="form-group"><label>Provider</label>
-      <select id="llm-provider">
+      <select id="llm-provider" onchange="onProviderChange(this.value)">
         <option value="openai"${cur.provider==='openai'?' selected':''}>OpenAI</option>
         <option value="anthropic"${cur.provider==='anthropic'?' selected':''}>Anthropic</option>
         <option value="gemini"${cur.provider==='gemini'?' selected':''}>Google Gemini</option>
+        <option value="ollama"${cur.provider==='ollama'?' selected':''}>Ollama (local)</option>
       </select>
     </div>
-    <div class="form-group"><label>API Key</label>
+    <div class="form-group" id="llm-key-group" style="${isOllama?'display:none':''}">
+      <label>API Key</label>
       <input id="llm-key" type="password" placeholder="sk-…" value="${cur.api_key||''}"/>
     </div>
+    <div id="ollama-hint" style="display:${isOllama?'block':'none'};padding:8px 10px;background:#161b22;border-radius:6px;border:1px solid #30363d;font-size:12px;color:#8b949e;margin-bottom:8px;">
+      🦙 No API key needed. Requires <a href="https://ollama.com" target="_blank" style="color:#58a6ff;">Ollama</a> running locally.<br/>
+      Pull a model first: <code style="color:#e6edf3;">ollama pull llama3</code>
+    </div>
     <div class="form-group"><label>Model <span style="color:#8b949e">(leave blank for default)</span></label>
-      <input id="llm-model" placeholder="e.g. gpt-4o, claude-sonnet-4-6, gemini-2.0-flash" value="${cur.model||''}"/>
+      <input id="llm-model" placeholder="${isOllama?'e.g. llama3, mistral, gemma3':'e.g. gpt-4o, claude-sonnet-4-6, gemini-2.0-flash'}" value="${cur.model||''}"/>
     </div>
     <div class="modal-actions">
       <button class="btn danger" onclick="clearLLM()">Clear</button>
@@ -708,11 +715,23 @@ function openLLMModal(){
   document.getElementById('modal-overlay').classList.add('open');
 }
 
+function onProviderChange(provider){
+  const keyGroup = document.getElementById('llm-key-group');
+  const hint = document.getElementById('ollama-hint');
+  const modelInput = document.getElementById('llm-model');
+  const isOllama = provider === 'ollama';
+  keyGroup.style.display = isOllama ? 'none' : '';
+  hint.style.display = isOllama ? 'block' : 'none';
+  modelInput.placeholder = isOllama
+    ? 'e.g. llama3, mistral, gemma3'
+    : 'e.g. gpt-4o, claude-sonnet-4-6, gemini-2.0-flash';
+}
+
 function saveLLM(){
   const provider = document.getElementById('llm-provider').value;
   const key = document.getElementById('llm-key').value.trim();
   const model = document.getElementById('llm-model').value.trim();
-  if(!key){ showToast('API key required', true); return; }
+  if(provider !== 'ollama' && !key){ showToast('API key required', true); return; }
   llmConfig = {provider, api_key: key, model: model||null};
   localStorage.setItem('pv_llm', JSON.stringify(llmConfig));
   updateLLMIndicator();

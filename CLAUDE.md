@@ -48,7 +48,7 @@ Optional: `langfuse`, `langsmith` (via extras `promptview[langfuse]` / `promptvi
 - **`patterns/`** — pattern definitions per SDK
 
 ### LLM Client (`src/promptview/llm/`)
-- **`client.py`** — `LLMClient(provider, api_key, model)` with uniform `complete(system, user) → str`. Providers: `openai` (gpt-4o-mini), `anthropic` (claude-haiku-4-5), `gemini` (gemini-2.0-flash). No `ImportError` guards — all three SDKs are always installed
+- **`client.py`** — `LLMClient(provider, api_key, model)` with uniform `complete(system, user) → str`. Providers: `openai` (gpt-4o-mini), `anthropic` (claude-haiku-4-5), `gemini` (gemini-2.0-flash), `ollama` (llama3, local, no API key). Ollama uses `httpx` to call `http://localhost:11434/api/chat` — no extra deps. Raises a friendly `RuntimeError` if Ollama isn't running.
 - **`decomposer.py`** — two operations:
   1. `decompose(prompt_text)` → list of `{label, content}` components
   2. `regenerate(original, old_components, new_components)` → updated prompt text that preserves original formatting/style, only reflecting diffs between old and new components

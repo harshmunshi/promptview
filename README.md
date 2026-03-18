@@ -50,7 +50,7 @@ Prompts in AI applications grow large and hard to manage. PromptView scans your 
 - **Git-like workflow** — `pv scan → pv add → pv commit → pv log`
 - **Component graph** — Every prompt is decomposed into labeled nodes (Role, Context, Instructions, Format, Examples…); edit nodes and the prompt updates surgically, preserving your original style
 - **Version history** — Toggle between any past version of a prompt in the UI
-- **Provider-agnostic LLM** — OpenAI, Anthropic, or Gemini for decomposition and regeneration
+- **Provider-agnostic LLM** — OpenAI, Anthropic, Gemini, or **Ollama** (local, free, no API key) for decomposition and regeneration
 - **Langfuse / LangSmith** — Optional push to external versioning platforms
 
 ---
@@ -84,7 +84,7 @@ pip install "promptview[all]"
 ### Requirements
 
 - Python 3.10 or higher
-- An API key for at least one LLM provider (OpenAI, Anthropic, or Google Gemini) if you want to use the component editor
+- An API key for at least one LLM provider **or** a locally running [Ollama](https://ollama.com) instance — required only for the component editor (decompose / regenerate). The rest of the tool works without any LLM.
 
 ---
 
@@ -283,13 +283,20 @@ Every committed snapshot is accessible via the **version selector** (dropdown at
 
 Set your provider and API key in the **Settings** panel (gear icon, top-right). Supported providers:
 
-| Provider | Default Model | Environment Variable |
-|---|---|---|
-| OpenAI | `gpt-4o-mini` | `OPENAI_API_KEY` |
-| Anthropic | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
-| Google Gemini | `gemini-2.0-flash` | `GOOGLE_API_KEY` |
+| Provider | Default Model | API Key Required | Notes |
+|---|---|---|---|
+| OpenAI | `gpt-4o-mini` | Yes (`OPENAI_API_KEY`) | Cloud |
+| Anthropic | `claude-haiku-4-5` | Yes (`ANTHROPIC_API_KEY`) | Cloud |
+| Google Gemini | `gemini-2.0-flash` | Yes (`GOOGLE_API_KEY`) | Cloud |
+| **Ollama** | `llama3` | **No** | Local — free, private |
 
 Keys are stored locally in `.promptview/config.toml` and never leave your machine.
+
+> **Using Ollama?** Install it from [ollama.com](https://ollama.com), pull a model, then select *Ollama (local)* in the settings panel — no API key needed.
+> ```bash
+> ollama pull llama3   # or: mistral, gemma3, phi3, codellama …
+> ollama serve         # starts on http://localhost:11434
+> ```
 
 ---
 
@@ -300,7 +307,7 @@ PromptView uses LLMs for two operations:
 1. **Decompose** — break a raw prompt string into labeled components (Role, Context, Instructions, etc.)
 2. **Regenerate** — after a node edit/add/delete, rewrite only the changed portion back into the prompt, keeping the rest intact and preserving your original tone and formatting
 
-Set keys via environment variables:
+### Cloud providers (API key required)
 
 ```bash
 export OPENAI_API_KEY="sk-..."
@@ -314,6 +321,27 @@ Or set them permanently for the project:
 pv config llm.provider anthropic
 pv config llm.api_key sk-ant-...
 ```
+
+### Ollama — local, free, no API key
+
+Run any open-source model entirely on your own machine:
+
+```bash
+# 1. Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Pull a model (pick any)
+ollama pull llama3       # Meta Llama 3 8B
+ollama pull mistral      # Mistral 7B
+ollama pull gemma3       # Google Gemma 3
+ollama pull phi3         # Microsoft Phi-3 mini
+ollama pull codellama    # Code-focused Llama
+
+# 3. Ollama serves automatically on http://localhost:11434
+# 4. Open pv ui → gear icon → select "Ollama (local)" → Save
+```
+
+No API key needed. All inference stays on your machine.
 
 ---
 

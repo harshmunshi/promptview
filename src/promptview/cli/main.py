@@ -16,6 +16,8 @@ from .commands.push import push_command
 from .commands.eval import app as eval_app
 from .commands.metrics import app as metrics_app
 from .commands.branch import app as branch_app, checkout_command, merge_command
+from .commands.hooks import app as hooks_app
+from .commands.cicd import app as cicd_app
 
 app = typer.Typer(
     name="promptview",
@@ -37,6 +39,8 @@ app.command("push", help="Push prompts to remote (langfuse/langsmith)")(push_com
 app.add_typer(eval_app, name="eval")
 app.add_typer(metrics_app, name="metrics")
 app.add_typer(branch_app, name="branch")
+app.add_typer(hooks_app, name="hooks")
+app.add_typer(cicd_app, name="cicd")
 app.command("checkout", help="Switch active branch for a prompt")(checkout_command)
 app.command("merge", help="Merge a branch into another")(merge_command)
 

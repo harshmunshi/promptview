@@ -410,6 +410,34 @@ your codebase
 
 ---
 
+## CI/CD Integration
+
+### Pre-commit hook
+
+Automatically block commits if any prompts in the codebase are untracked:
+
+```bash
+pv hooks install    # installs .git/hooks/pre-commit
+pv hooks status     # check installation status
+pv hooks uninstall  # remove the hook
+```
+
+### GitHub Actions
+
+Generate a ready-to-use workflow file:
+
+```bash
+pv cicd generate --output .github/workflows/promptview.yml
+```
+
+This adds a PR check that:
+1. Scans for any untracked prompts (`pv scan --fail-on-untracked`)
+2. Optionally runs eval regression checks (uncomment the eval step and add your API key secret)
+
+A copy of the template is at [`assets/github-actions/promptview.yml`](assets/github-actions/promptview.yml).
+
+---
+
 ## Development Setup
 
 Clone the repo and install in editable mode with UV:

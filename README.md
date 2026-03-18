@@ -359,6 +359,15 @@ pv config langfuse.host https://cloud.langfuse.com   # optional, defaults to clo
 pv push langfuse
 ```
 
+#### Pull from Langfuse
+
+```bash
+pv pull langfuse              # pull all prompts and versions
+pv pull langfuse --prompt my_prompt   # pull a specific prompt only
+pv pull langfuse --evals      # also import eval scores for local versions
+pv sync langfuse              # push + pull in one command
+```
+
 ### LangSmith
 
 ```bash
@@ -368,6 +377,14 @@ pv config langsmith.api_key ls__...
 pv config langsmith.project my-project   # optional
 
 pv push langsmith
+```
+
+#### Pull from LangSmith
+
+```bash
+pv pull langsmith             # pull all prompts and versions
+pv pull langsmith --prompt my_prompt  # pull a specific prompt only
+pv sync langsmith             # push + pull in one command
 ```
 
 ---

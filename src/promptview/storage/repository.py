@@ -463,6 +463,62 @@ class PromptRepository:
         )
         return self.db.create_branch(branch)
 
+    # ---- Remote Ingestion ----
+
+    def ingest_remote_prompts(self, remote_data: list[dict], source: str) -> dict:
+        """Ingest a list of prompt dicts fetched from a remote into the local repo.
+
+        Each item in remote_data must have at minimum:
+            {"name": str, "content": str}
+        Optional fields: "version" (int), "labels" (list), "created_at" (str)
+
+        For each item:
+        - If a local prompt with the same name already exists, add a new version
+          only if the content hash differs from all existing versions.
+        - If no local prompt exists, create it with source=PromptSource.MANUAL and
+          description="Pulled from <source>".
+
+        Returns:
+            {"created": N, "updated": N, "skipped": N}
+        """
+        created = 0
+        updated = 0
+        skipped = 0
+
+        for item in remote_data:
+            name = item.get("name", "").strip()
+            content = item.get("content", "").strip()
+            if not name or not content:
+                skipped += 1
+                continue
+
+            # Compute content hash (short, matching existing convention)
+            content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+
+            existing_prompt = self.db.get_prompt_by_name(name)
+
+            if existing_prompt is None:
+                # Create a brand-new prompt
+                prompt, _version = self.create_prompt(
+                    name=name,
+                    content=content,
+                    source=PromptSource.MANUAL,
+                    description=f"Pulled from {source}",
+                )
+                created += 1
+            else:
+                # Check if any existing version has the same hash
+                existing_versions = self.db.list_versions(existing_prompt.id)
+                hashes = {v.content_hash for v in existing_versions}
+                if content_hash in hashes:
+                    skipped += 1
+                    continue
+                # Add a new version
+                self.update_prompt_content(existing_prompt.id, content)
+                updated += 1
+
+        return {"created": created, "updated": updated, "skipped": skipped}
+
     @classmethod
     def find_root(cls, start: Optional[Path] = None) -> Path:
         """Walk up from start until finding .promptview/ dir."""

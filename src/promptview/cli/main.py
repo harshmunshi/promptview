@@ -18,6 +18,8 @@ from .commands.metrics import app as metrics_app
 from .commands.branch import app as branch_app, checkout_command, merge_command
 from .commands.hooks import app as hooks_app
 from .commands.cicd import app as cicd_app
+from .commands.pull import app as pull_app
+from .commands.sync import app as sync_app
 
 app = typer.Typer(
     name="promptview",
@@ -41,6 +43,8 @@ app.add_typer(metrics_app, name="metrics")
 app.add_typer(branch_app, name="branch")
 app.add_typer(hooks_app, name="hooks")
 app.add_typer(cicd_app, name="cicd")
+app.add_typer(pull_app, name="pull")
+app.add_typer(sync_app, name="sync")
 app.command("checkout", help="Switch active branch for a prompt")(checkout_command)
 app.command("merge", help="Merge a branch into another")(merge_command)
 

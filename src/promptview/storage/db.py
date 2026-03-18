@@ -8,7 +8,7 @@ from typing import Optional
 
 from .models import (
     Commit, EvalResult, EvalRun, Prompt, PromptBlock, PromptBranch, PromptComponent,
-    PromptRole, PromptSource, PromptVersion, TestCase,
+    PromptRole, PromptSource, PromptVariable, PromptVersion, TestCase,
 )
 
 SCHEMA = """
@@ -113,6 +113,17 @@ CREATE TABLE IF NOT EXISTS prompt_branches (
   created_at      TEXT NOT NULL,
   merged_at       TEXT,
   UNIQUE(prompt_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS prompt_variables (
+    id            TEXT PRIMARY KEY,
+    prompt_id     TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    default_value TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    FOREIGN KEY (prompt_id) REFERENCES prompts(id) ON DELETE CASCADE,
+    UNIQUE(prompt_id, name)
 );
 """
 
@@ -562,4 +573,52 @@ class Database:
             is_default=bool(row["is_default"]),
             created_at=row["created_at"],
             merged_at=row["merged_at"],
+        )
+
+    # ---- PromptVariables ----
+
+    def upsert_variable(self, v: PromptVariable) -> PromptVariable:
+        """Insert or update a variable (by prompt_id + name)."""
+        self._conn.execute(
+            """INSERT INTO prompt_variables (id, prompt_id, name, default_value, description, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(prompt_id, name) DO UPDATE SET
+                 default_value=excluded.default_value,
+                 description=excluded.description""",
+            (v.id, v.prompt_id, v.name, v.default_value, v.description, v.created_at),
+        )
+        self._conn.commit()
+        return v
+
+    def list_variables(self, prompt_id: str) -> list[PromptVariable]:
+        """Return all variables for a prompt, ordered by name."""
+        rows = self._conn.execute(
+            "SELECT * FROM prompt_variables WHERE prompt_id=? ORDER BY name",
+            (prompt_id,),
+        ).fetchall()
+        return [self._row_to_variable(r) for r in rows]
+
+    def delete_variable(self, variable_id: str) -> None:
+        """Remove a variable by id."""
+        self._conn.execute(
+            "DELETE FROM prompt_variables WHERE id=?", (variable_id,)
+        )
+        self._conn.commit()
+
+    def get_variable_by_name(self, prompt_id: str, name: str) -> Optional[PromptVariable]:
+        """Fetch a single variable by prompt_id + name."""
+        row = self._conn.execute(
+            "SELECT * FROM prompt_variables WHERE prompt_id=? AND name=?",
+            (prompt_id, name),
+        ).fetchone()
+        return self._row_to_variable(row) if row else None
+
+    def _row_to_variable(self, row: sqlite3.Row) -> PromptVariable:
+        return PromptVariable(
+            id=row["id"],
+            prompt_id=row["prompt_id"],
+            name=row["name"],
+            default_value=row["default_value"] or "",
+            description=row["description"] or "",
+            created_at=row["created_at"],
         )

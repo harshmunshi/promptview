@@ -123,6 +123,22 @@ svg#graph{width:100%;height:100%}
 .spinner{width:14px;height:14px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── Variables panel ─────────────────────── */
+#variables-panel{flex:1;overflow-y:auto;padding:16px;display:none;flex-direction:column;gap:12px}
+#variables-panel.visible{display:flex}
+.vars-section-title{font-size:12px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.vars-table{width:100%;border-collapse:collapse;font-size:12px}
+.vars-table th{text-align:left;padding:6px 10px;color:#8b949e;border-bottom:1px solid #30363d;font-weight:600;font-size:11px}
+.vars-table td{padding:5px 8px;border-bottom:1px solid #21262d;vertical-align:middle}
+.vars-table tr:hover td{background:#161b22}
+.var-name-cell{color:#79c0ff;font-family:'SF Mono','Fira Code',monospace;font-size:12px;white-space:nowrap}
+.var-input{width:100%;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 7px;border-radius:4px;font-family:inherit;font-size:11px}
+.var-input:focus{outline:none;border-color:#58a6ff}
+.var-save-btn{background:#21262d;border:1px solid #30363d;color:#3fb950;padding:3px 9px;border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap}
+.var-save-btn:hover{background:#1a3a1a;border-color:#3fb950}
+.vars-empty{color:#8b949e;font-size:12px;padding:8px 0}
+.vars-actions{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+
 /* ── Branch bar ──────────────────────────── */
 #branch-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:0 0 2px 0}
 #branch-label{font-size:10px;color:#8b949e;white-space:nowrap}
@@ -218,6 +234,7 @@ svg#graph{width:100%;height:100%}
     <!-- Tab bar -->
     <div id="tab-bar" style="display:none">
       <button class="tab-btn active" id="tab-graph" onclick="switchTab('graph')">Components</button>
+      <button class="tab-btn" id="tab-variables" onclick="switchTab('variables')">Variables</button>
       <button class="tab-btn" id="tab-metrics" onclick="switchTab('metrics')">Metrics</button>
     </div>
 
@@ -252,6 +269,19 @@ svg#graph{width:100%;height:100%}
         <div class="metrics-section-title">Stored Test Cases</div>
         <div id="test-cases-container">
           <div style="color:#8b949e;font-size:12px">No test cases stored.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Variables panel -->
+    <div id="variables-panel">
+      <div>
+        <div class="vars-actions">
+          <div class="vars-section-title" style="margin-bottom:0">Template Variables</div>
+          <button class="btn" onclick="syncVariables()" style="margin-left:auto">⟳ Sync Variables</button>
+        </div>
+        <div id="variables-container">
+          <div class="vars-empty">No variables found. Click "Sync Variables" to detect {slots} in this prompt.</div>
         </div>
       </div>
     </div>
@@ -306,6 +336,7 @@ svg#graph{width:100%;height:100%}
 // ─── State ────────────────────────────────────────────────────────────────────
 let allPrompts = [];
 let selectedPromptId = null;
+let promptVariables = [];   // variables for selected prompt
 let allVersions = [];          // all versions for the selected prompt
 let currentVersionId = null;   // the version currently being viewed
 let components = [];           // working copy of components for currentVersionId
@@ -478,6 +509,11 @@ async function decomposeSelected(){
     dirty = false;
     showGraph();
     showToast(`Decomposed into ${components.length} components`);
+    // Auto-sync variables after decompose
+    try {
+      const varResult = await api(`/api/prompts/${selectedPromptId}/variables/sync`, 'POST');
+      promptVariables = varResult.variables;
+    } catch(e){ /* silently ignore variable sync errors */ }
   } catch(e){
     showToast(e.message, true);
   } finally {
@@ -954,15 +990,18 @@ function switchTab(tab){
   activeTab = tab;
   document.getElementById('tab-graph').classList.toggle('active', tab==='graph');
   document.getElementById('tab-metrics').classList.toggle('active', tab==='metrics');
+  document.getElementById('tab-variables').classList.toggle('active', tab==='variables');
 
   const canvas = document.getElementById('graph-canvas');
   const empty = document.getElementById('graph-empty');
   const metricsPanel = document.getElementById('metrics-panel');
+  const variablesPanel = document.getElementById('variables-panel');
   const footer = document.getElementById('prompt-footer');
   const graphActions = document.getElementById('graph-actions');
 
   if(tab === 'graph'){
     metricsPanel.classList.remove('visible');
+    variablesPanel.classList.remove('visible');
     graphActions.style.display = 'flex';
     // Restore graph / empty state
     if(components.length){
@@ -973,13 +1012,85 @@ function switchTab(tab){
       canvas.style.display = 'none';
       empty.style.display = 'flex';
     }
+  } else if(tab === 'variables'){
+    canvas.style.display = 'none';
+    empty.style.display = 'none';
+    footer.style.display = 'none';
+    graphActions.style.display = 'none';
+    metricsPanel.classList.remove('visible');
+    variablesPanel.classList.add('visible');
+    loadVariables();
   } else {
     canvas.style.display = 'none';
     empty.style.display = 'none';
     footer.style.display = 'none';
     graphActions.style.display = 'none';
+    variablesPanel.classList.remove('visible');
     metricsPanel.classList.add('visible');
     refreshMetrics();
+  }
+}
+
+// ─── Variables tab ────────────────────────────────────────────────────────────
+
+async function loadVariables(){
+  if(!selectedPromptId) return;
+  try {
+    promptVariables = await api(`/api/prompts/${selectedPromptId}/variables`);
+    renderVariables();
+  } catch(e){
+    console.error('Failed to load variables:', e);
+  }
+}
+
+function renderVariables(){
+  const container = document.getElementById('variables-container');
+  if(!promptVariables.length){
+    container.innerHTML = '<div class="vars-empty">No variables found. Click "Sync Variables" to detect {slots} in this prompt.</div>';
+    return;
+  }
+  let html = `<table class="vars-table"><thead><tr>
+    <th>Variable</th><th>Default Value</th><th>Description</th><th></th>
+  </tr></thead><tbody>`;
+  for(const v of promptVariables){
+    html += `<tr>
+      <td class="var-name-cell">{${escHtml(v.name)}}</td>
+      <td><input class="var-input" id="var-default-${v.id}" value="${escHtml(v.default_value)}" placeholder="(empty)"/></td>
+      <td><input class="var-input" id="var-desc-${v.id}" value="${escHtml(v.description)}" placeholder="Optional description"/></td>
+      <td><button class="var-save-btn" onclick="saveVariable('${v.id}')">Save</button></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function saveVariable(varId){
+  if(!selectedPromptId) return;
+  const defVal = document.getElementById('var-default-'+varId).value;
+  const desc = document.getElementById('var-desc-'+varId).value;
+  try {
+    const updated = await api(`/api/prompts/${selectedPromptId}/variables/${varId}`, 'PUT', {
+      default_value: defVal,
+      description: desc,
+    });
+    // Update local state
+    const idx = promptVariables.findIndex(v => v.id === varId);
+    if(idx !== -1) promptVariables[idx] = updated;
+    showToast(`Saved variable {${updated.name}}`);
+  } catch(e){
+    showToast(e.message, true);
+  }
+}
+
+async function syncVariables(){
+  if(!selectedPromptId) return;
+  try {
+    const result = await api(`/api/prompts/${selectedPromptId}/variables/sync`, 'POST');
+    promptVariables = result.variables;
+    renderVariables();
+    showToast(`Synced ${result.synced} variable(s) (${result.new} new)`);
+  } catch(e){
+    showToast(e.message, true);
   }
 }
 

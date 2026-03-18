@@ -440,6 +440,52 @@ pv pull-remote https://my-server.com/promptview/
 
 ---
 
+## Template Variables
+
+PromptView automatically detects `{variable}` slots in prompts and lets you manage default values, making prompts reusable and parameterised.
+
+### Auto-detect variables
+
+```bash
+pv vars sync my_prompt          # scan prompt text and register all {slots}
+pv vars show my_prompt          # list all variables with defaults
+pv vars set my_prompt lang Python   # set a default value
+pv vars set my_prompt lang Python --desc "Target programming language"
+```
+
+### Render with values
+
+```bash
+pv run my_prompt                            # render using stored defaults
+pv run my_prompt --var user=Alice           # override a variable
+pv run my_prompt --var user=Alice --call    # render + send to LLM
+pv run my_prompt -v user=Alice -v lang=Python --provider anthropic --api-key $KEY
+```
+
+### Prompt composition
+
+Embed one prompt inside another using `{{ include: prompt_name }}`:
+
+```
+You are a helpful assistant.
+
+{{ include: base_instructions }}
+
+Now help the user with: {task}
+```
+
+Includes are resolved when rendering with `pv run` or via the API.
+
+### API
+
+```
+GET    /api/prompts/{id}/variables          List variables
+POST   /api/prompts/{id}/variables/sync     Auto-detect from latest version
+PUT    /api/prompts/{id}/variables/{vid}    Update default value / description
+```
+
+---
+
 ## How It Works
 
 ```

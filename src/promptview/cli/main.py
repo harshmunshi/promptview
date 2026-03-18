@@ -22,6 +22,8 @@ from .commands.hooks import app as hooks_app
 from .commands.cicd import app as cicd_app
 from .commands.pull import app as pull_app
 from .commands.sync import app as sync_app
+from .commands.run import app as run_app
+from .commands.vars import app as vars_app
 
 app = typer.Typer(
     name="promptview",
@@ -50,6 +52,8 @@ app.add_typer(hooks_app, name="hooks")
 app.add_typer(cicd_app, name="cicd")
 app.add_typer(pull_app, name="pull")
 app.add_typer(sync_app, name="sync")
+app.add_typer(run_app, name="run")
+app.add_typer(vars_app, name="vars")
 app.command("checkout", help="Switch active branch for a prompt")(checkout_command)
 app.command("merge", help="Merge a branch into another")(merge_command)
 

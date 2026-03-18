@@ -261,6 +261,29 @@ class PromptBranch:
 
 
 @dataclass
+class PromptVariable:
+    """A template variable slot detected in a prompt (e.g. {user_name})."""
+    id: str
+    prompt_id: str
+    name: str            # e.g. "user_name"
+    default_value: str   # can be empty string
+    description: str     # optional human description
+    created_at: str
+
+    @classmethod
+    def new(cls, prompt_id: str, name: str, default_value: str = "", description: str = "") -> "PromptVariable":
+        import uuid, datetime
+        return cls(
+            id=str(uuid.uuid4()),
+            prompt_id=prompt_id,
+            name=name,
+            default_value=default_value,
+            description=description,
+            created_at=datetime.datetime.utcnow().isoformat(),
+        )
+
+
+@dataclass
 class EvalResult:
     id: str
     eval_run_id: str

@@ -1,6 +1,7 @@
 """Prompt CRUD routes."""
 
 from fastapi import APIRouter, HTTPException, Request
+from typing import Any
 from ..schemas import (
     PromptSchema, VersionSchema, CreatePromptRequest, UpdatePromptRequest,
     CommitRequest, CommitSchema, PromptBlockSchema,
@@ -160,3 +161,64 @@ def commit_prompts(body: CommitRequest, request: Request):
         )
     except NothingToCommitError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---- Template Variables ----
+
+@router.get("/{prompt_id}/variables")
+def list_variables(prompt_id: str, request: Request):
+    """Return stored template variables for a prompt."""
+    repo = request.app.state.repo
+    variables = repo.db.list_variables(prompt_id)
+    return [
+        {"id": v.id, "name": v.name, "default_value": v.default_value, "description": v.description}
+        for v in variables
+    ]
+
+
+@router.post("/{prompt_id}/variables/sync")
+def sync_variables(prompt_id: str, request: Request):
+    """Auto-detect {variable} slots in the latest version and store them."""
+    from ...template import extract_variables
+    from ...storage.models import PromptVariable
+    repo = request.app.state.repo
+    prompt = repo.get_prompt_by_id(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    versions = repo.db.list_versions(prompt_id)
+    if not versions:
+        return {"synced": 0, "variables": []}
+    raw = versions[-1].raw_content
+    found = extract_variables(raw)
+    added = []
+    for name in found:
+        existing = repo.db.get_variable_by_name(prompt_id, name)
+        if existing is None:
+            v = PromptVariable.new(prompt_id, name)
+            repo.db.upsert_variable(v)
+            added.append(name)
+    all_vars = repo.db.list_variables(prompt_id)
+    return {
+        "synced": len(found),
+        "new": len(added),
+        "variables": [
+            {"id": v.id, "name": v.name, "default_value": v.default_value, "description": v.description}
+            for v in all_vars
+        ],
+    }
+
+
+@router.put("/{prompt_id}/variables/{variable_id}")
+def update_variable(prompt_id: str, variable_id: str, body: dict[str, Any], request: Request):
+    """Update default_value or description for a variable."""
+    repo = request.app.state.repo
+    existing = repo.db.list_variables(prompt_id)
+    var = next((v for v in existing if v.id == variable_id), None)
+    if not var:
+        raise HTTPException(status_code=404, detail="Variable not found")
+    if "default_value" in body:
+        var.default_value = body["default_value"]
+    if "description" in body:
+        var.description = body["description"]
+    repo.db.upsert_variable(var)
+    return {"id": var.id, "name": var.name, "default_value": var.default_value, "description": var.description}

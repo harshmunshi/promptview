@@ -29,13 +29,14 @@ httpx, python-dotenv, openai>=1.0, anthropic>=0.20, google-generativeai>=0.5
 Optional: `langfuse`, `langsmith` (via extras `promptview[langfuse]` / `promptview[langsmith]`)
 
 ### Storage Layer (`src/promptview/storage/`)
-- **`models.py`** — dataclasses: `Prompt`, `PromptVersion`, `PromptBlock`, `Commit`, `PromptComponent`; enums: `PromptSource` (OPENAI, ANTHROPIC, LANGCHAIN, LITELLM, RAW, MANUAL), `PromptRole` (SYSTEM, USER, ASSISTANT, FULL)
-- **`db.py`** — SQLite layer with `check_same_thread=False`, 5 tables:
+- **`models.py`** — dataclasses: `Prompt`, `PromptVersion`, `PromptBlock`, `Commit`, `PromptComponent`, `PromptVariable`; enums: `PromptSource` (OPENAI, ANTHROPIC, LANGCHAIN, LITELLM, RAW, MANUAL), `PromptRole` (SYSTEM, USER, ASSISTANT, FULL)
+- **`db.py`** — SQLite layer with `check_same_thread=False`, tables:
   - `prompts` (id, name, description, source, file_path, line_number, variable_name, tags, timestamps)
   - `prompt_versions` (id, prompt_id, version_number, raw_content, blocks JSON, content_hash, commit_id, parent_version_id)
   - `commits` (id as 8-char hash, message, author, timestamp, version_ids JSON)
   - `remotes` (name PK, provider, endpoint, project)
   - `prompt_components` (id, prompt_id, version_id, label, content, position, created_at)
+  - `prompt_variables` (id, prompt_id, name, default_value, description, created_at) — template variable slots
   - Schema runs `CREATE TABLE IF NOT EXISTS` on every `connect()` so new tables auto-migrate
 - **`repository.py`** — `PromptRepository` facade: `initialize()`, `open()`, `close()`, staging (`stage/unstage/get_staged/clear_index`), commits, diffs, status, CRUD for prompts and components
 - **`diff_engine.py`** — unified diff between two prompt versions
@@ -53,6 +54,13 @@ Optional: `langfuse`, `langsmith` (via extras `promptview[langfuse]` / `promptvi
   1. `decompose(prompt_text)` → list of `{label, content}` components
   2. `regenerate(original, old_components, new_components)` → updated prompt text that preserves original formatting/style, only reflecting diffs between old and new components
 
+### Template Engine (`src/promptview/template.py`)
+- `extract_variables(text)` — finds all `{slot}` names in prompt text
+- `extract_includes(text)` — finds all `{{ include: name }}` directives
+- `render(text, variables)` — substitutes `{slot}` with values, leaves unknowns intact
+- `resolve_includes(text, lookup)` — replaces `{{ include: name }}` with referenced prompt content
+- `render_full(text, variables, lookup)` — includes then variables in one pass
+
 ### CLI (`src/promptview/cli/`)
 - **`main.py`** — Typer app, registers all commands; both `promptview` and `pv` aliases work
 - **`output.py`** — Rich formatting helpers
@@ -67,6 +75,8 @@ Optional: `langfuse`, `langsmith` (via extras `promptview[langfuse]` / `promptvi
   - `ui.py` — `pv ui [--port] [--host] [--no-browser]`
   - `config.py` — `pv config [key] [value] [--show]`
   - `push.py` — `pv push langfuse|langsmith [--dry-run]`
+  - `vars.py` — `pv vars sync|show|set` — manage template variable defaults per prompt
+  - `run.py` — `pv run NAME [--var key=value] [--call]` — render a prompt with variable substitution and optionally call an LLM
 
 ### FastAPI Server (`src/promptview/server/`)
 - **`app.py`** — factory: registers 4 routers under `/api`, mounts static, serves `index.html` at `/`, health at `/health`
@@ -115,7 +125,7 @@ Single ~850-line vanilla JS + D3.js SPA. GitHub Dark color scheme (`#0d1117`, `#
 ### High Priority
 - [ ] **Git-style branching** — `pv branch`, `pv checkout`, `pv merge` for prompt branches
 - [ ] **`pv pull`** — pull versions from langfuse/langsmith into local repo
-- [ ] **Prompt templates / variables** — `{variable}` slot detection and substitution UI
+- [x] **Prompt templates / variables** — `{variable}` slot detection, `pv vars sync/show/set`, `pv run --var key=value`, UI variables panel, `{{ include: other_prompt }}` composition
 - [ ] **Diff view in UI** — side-by-side version diff rendering in the web interface
 - [ ] **Export** — export a prompt version as `.txt`, `.json`, or copy to clipboard from UI
 - [ ] **Search** — full-text search across prompt content (not just name)

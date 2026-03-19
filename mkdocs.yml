@@ -1,0 +1,122 @@
+site_name: PromptView
+site_description: Git-like versioning and visual management for LLM prompts
+site_url: https://harshmunshi.github.io/promptview/
+repo_url: https://github.com/harshmunshi/promptview
+repo_name: harshmunshi/promptview
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quick-start.md
+    - Core Concepts: getting-started/concepts.md
+  - How It Works:
+    - Architecture: how-it-works/architecture.md
+    - Prompt Scanner: how-it-works/scanner.md
+    - Versioning Model: how-it-works/versioning.md
+    - Component Graph: how-it-works/component-graph.md
+  - CLI Reference:
+    - Overview: cli/overview.md
+    - pv init: cli/init.md
+    - pv scan: cli/scan.md
+    - pv add & commit: cli/add-commit.md
+    - pv status & diff & log: cli/status-diff-log.md
+    - pv ui: cli/ui.md
+    - pv vars & run: cli/vars-run.md
+    - pv eval & metrics: cli/eval-metrics.md
+    - pv remote: cli/remote-backends.md
+    - pv push / pull / sync: cli/integrations.md
+    - pv hooks & cicd: cli/hooks-cicd.md
+  - Web UI:
+    - Overview: ui/overview.md
+    - Component Graph Editor: ui/component-graph.md
+    - Version Switcher: ui/version-switcher.md
+    - Variables Panel: ui/variables-panel.md
+    - Metrics & Evals: ui/metrics-tab.md
+  - LLM Providers:
+    - Overview: llm/providers.md
+    - Ollama (Local): llm/ollama.md
+    - Decompose & Regenerate: llm/decompose-regenerate.md
+  - Template Variables:
+    - Variables: template-system/variables.md
+    - Prompt Composition: template-system/composition.md
+  - Evaluations:
+    - Overview: eval/overview.md
+    - Datasets: eval/datasets.md
+    - Scorers: eval/scorers.md
+    - Viewing Results: eval/results.md
+  - Integrations:
+    - Langfuse: integrations/langfuse.md
+    - LangSmith: integrations/langsmith.md
+    - Remote Backends (S3/GCS/HTTP): integrations/remote-backends.md
+  - Advanced:
+    - Team Workflow: advanced/team-workflow.md
+    - CI/CD Integration: advanced/ci-cd.md
+    - API Reference: advanced/api-reference.md
+  - Contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/harshmunshi/promptview
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/promptview/

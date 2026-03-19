@@ -162,6 +162,20 @@ svg#graph{width:100%;height:100%}
 .metrics-table th{text-align:left;padding:6px 10px;color:#8b949e;border-bottom:1px solid #30363d;font-weight:600;font-size:11px}
 .metrics-table td{padding:6px 10px;border-bottom:1px solid #21262d;color:#c9d1d9;vertical-align:top}
 .metrics-table tr:hover td{background:#161b22}
+.metrics-table tr.run-row{cursor:pointer}
+.eval-results-row td{padding:0;border-bottom:1px solid #30363d}
+.eval-results-box{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.eval-case-card{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;font-size:11px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.eval-case-card.failed{border-left:3px solid #f85149}
+.eval-case-card.passed{border-left:3px solid #3fb950}
+.eval-case-label{font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;margin-bottom:3px}
+.eval-case-text{color:#c9d1d9;white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
+.eval-case-actual{color:#79c0ff;white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
+.eval-case-reasoning{grid-column:1/-1;color:#8b949e;font-style:italic;font-size:10px;border-top:1px solid #21262d;padding-top:5px;margin-top:2px}
+.eval-case-scores{display:flex;gap:12px;align-items:center;grid-column:1/-1;border-top:1px solid #21262d;padding-top:5px;margin-top:2px}
+.eval-score-pill{padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.eval-score-pill.pass{background:#1a3c26;color:#3fb950}
+.eval-score-pill.fail{background:#3c1a1a;color:#f85149}
 .pass-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
 .pass-badge.good{background:#1a3a1a;color:#3fb950;border:1px solid #3fb950}
 .pass-badge.bad{background:#3a1a1a;color:#f85149;border:1px solid #f85149}
@@ -1116,6 +1130,8 @@ async function refreshMetrics(){
   renderVersionPillsWithMetrics();
 }
 
+let expandedRunId = null;
+
 function renderEvalRuns(){
   const container = document.getElementById('eval-runs-container');
   if(!evalRuns.length){
@@ -1124,7 +1140,7 @@ function renderEvalRuns(){
   }
   const sorted = [...evalRuns].reverse();
   let html = `<table class="metrics-table"><thead><tr>
-    <th>Run ID</th><th>Version</th><th>Source</th><th>Pass Rate</th><th>Passed/Total</th><th>Judge</th><th>Latency</th><th>Run At</th>
+    <th></th><th>Run ID</th><th>Version</th><th>Source</th><th>Pass Rate</th><th>Passed/Total</th><th>Judge</th><th>Latency</th><th>Run At</th>
   </tr></thead><tbody>`;
   for(const run of sorted){
     const pr = run.pass_rate;
@@ -1132,7 +1148,10 @@ function renderEvalRuns(){
     const vNum = allVersions.find(v => v.id === run.version_id);
     const vLabel = vNum ? `v${vNum.version_number}` : run.version_id.slice(0,8);
     const judge = run.avg_judge_score !== null && run.avg_judge_score !== undefined ? run.avg_judge_score.toFixed(2) : '-';
-    html += `<tr>
+    const isExpanded = expandedRunId === run.id;
+    const chevron = isExpanded ? '▾' : '▸';
+    html += `<tr class="run-row" onclick="toggleRunResults('${run.id}')">
+      <td style="width:16px;color:#8b949e">${chevron}</td>
       <td style="font-family:monospace">${escHtml(run.id.slice(0,8))}</td>
       <td>${escHtml(vLabel)}</td>
       <td><span class="source-badge">${escHtml(run.source)}</span></td>
@@ -1142,9 +1161,80 @@ function renderEvalRuns(){
       <td>${run.avg_latency_ms.toFixed(0)}ms</td>
       <td style="font-size:10px;color:#8b949e">${escHtml(run.run_at.slice(0,19))}</td>
     </tr>`;
+    if(isExpanded){
+      html += `<tr class="eval-results-row"><td colspan="9"><div class="eval-results-box" id="eval-results-${run.id}">
+        <div style="color:#8b949e;font-size:11px">Loading responses…</div>
+      </div></td></tr>`;
+    }
   }
   html += '</tbody></table>';
   container.innerHTML = html;
+  if(expandedRunId){
+    loadRunResults(expandedRunId);
+  }
+}
+
+async function toggleRunResults(runId){
+  if(expandedRunId === runId){
+    expandedRunId = null;
+  } else {
+    expandedRunId = runId;
+  }
+  renderEvalRuns();
+}
+
+async function loadRunResults(runId){
+  const box = document.getElementById(`eval-results-${runId}`);
+  if(!box) return;
+  try {
+    const data = await api(`/api/prompts/${selectedPromptId}/evals/${runId}`);
+    const results = data.results || [];
+    const cases = {};
+    (storedTestCases || []).forEach(tc => { cases[tc.id] = tc; });
+
+    if(!results.length){
+      box.innerHTML = '<div style="color:#8b949e;font-size:11px">No individual results stored.</div>';
+      return;
+    }
+
+    box.innerHTML = results.map(r => {
+      const tc = cases[r.test_case_id] || {};
+      const passedCls = r.passed ? 'passed' : 'failed';
+      const passLabel = r.passed
+        ? '<span class="eval-score-pill pass">✓ PASS</span>'
+        : '<span class="eval-score-pill fail">✗ FAIL</span>';
+      const sim = r.similarity_score != null ? `Similarity: ${(r.similarity_score*100).toFixed(0)}%` : '';
+      const jScore = r.judge_score != null ? `Judge: ${r.judge_score.toFixed(2)}` : '';
+      const latency = r.latency_ms ? `${r.latency_ms.toFixed(0)}ms` : '';
+      const expected = tc.expected_output || r.expected_output || '';
+      return `<div class="eval-case-card ${passedCls}">
+        <div>
+          <div class="eval-case-label">Input</div>
+          <div class="eval-case-text">${escHtml(tc.input || '')}</div>
+        </div>
+        <div>
+          <div class="eval-case-label">Actual Response</div>
+          <div class="eval-case-actual">${escHtml(r.actual_output || '')}</div>
+        </div>
+        ${expected ? `<div>
+          <div class="eval-case-label">Expected</div>
+          <div class="eval-case-text">${escHtml(expected)}</div>
+        </div>` : '<div></div>'}
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div class="eval-case-label">Scores</div>
+          <div class="eval-case-scores" style="border:none;padding:0;margin:0">
+            ${passLabel}
+            ${sim ? `<span style="color:#8b949e;font-size:10px">${escHtml(sim)}</span>` : ''}
+            ${jScore ? `<span style="color:#8b949e;font-size:10px">${escHtml(jScore)}</span>` : ''}
+            ${latency ? `<span style="color:#8b949e;font-size:10px">${escHtml(latency)}</span>` : ''}
+          </div>
+        </div>
+        ${r.judge_reasoning ? `<div class="eval-case-reasoning">Judge reasoning: ${escHtml(r.judge_reasoning)}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    if(box) box.innerHTML = `<div style="color:#f85149;font-size:11px">Failed to load results: ${escHtml(String(e))}</div>`;
+  }
 }
 
 function renderTestCases(){

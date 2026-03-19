@@ -155,6 +155,99 @@ def compare(
         repo.close()
 
 
+@app.command("results")
+def results(
+    run_id: str = typer.Argument(..., help="Eval run ID (or prefix) from 'pv metrics show'"),
+    prompt_name: str = typer.Option(..., "--prompt", "-p", help="Prompt name"),
+    failed_only: bool = typer.Option(False, "--failed", "-f", help="Show only failed cases"),
+):
+    """Show per-case inputs, actual responses, and scores for an eval run."""
+    from ...storage.repository import PromptRepository
+    from ...exceptions import NotInitializedError
+
+    repo = PromptRepository(PromptRepository.find_root())
+    try:
+        repo.open()
+    except NotInitializedError:
+        console.print("[red]Not initialized. Run: pv init[/red]")
+        raise typer.Exit(1)
+
+    try:
+        prompts = repo.list_prompts()
+        p = next((x for x in prompts if x.name == prompt_name), None)
+        if not p:
+            console.print(f"[red]Prompt '{prompt_name}' not found[/red]")
+            raise typer.Exit(1)
+
+        # Resolve run ID (full or prefix)
+        runs = repo.db.list_eval_runs(p.id)
+        run = next((r for r in runs if r.id.startswith(run_id)), None)
+        if not run:
+            console.print(f"[red]No eval run starting with '{run_id}' for prompt '{prompt_name}'[/red]")
+            console.print("[dim]Use 'pv metrics show <prompt>' to list run IDs[/dim]")
+            raise typer.Exit(1)
+
+        eval_results = repo.db.list_eval_results(run.id)
+        if not eval_results:
+            console.print("[yellow]No individual results stored for this run.[/yellow]")
+            return
+
+        # Build test case lookup
+        test_cases = {tc.id: tc for tc in repo.db.list_test_cases(p.id)}
+
+        if failed_only:
+            eval_results = [r for r in eval_results if not r.passed]
+
+        console.print(f"\n[bold]Eval run [cyan]{run.id[:8]}[/cyan] — {len(eval_results)} case(s)[/bold]\n")
+
+        for i, r in enumerate(eval_results, 1):
+            tc = test_cases.get(r.test_case_id)
+            status = "[green]✓ PASS[/green]" if r.passed else "[red]✗ FAIL[/red]"
+            console.print(f"[bold dim]─── Case {i} {status} ───────────────────────────[/bold dim]")
+
+            # Input
+            console.print(f"[dim]Input:[/dim]")
+            console.print(f"  {tc.input if tc else '[unknown]'}\n")
+
+            # Actual response
+            console.print(f"[dim]Actual response:[/dim]")
+            if r.actual_output and r.actual_output.startswith("[ERROR"):
+                console.print(f"  [red]{r.actual_output}[/red]\n")
+            else:
+                console.print(f"  [cyan]{r.actual_output or '(empty)'}[/cyan]\n")
+
+            # Expected (if any)
+            expected = (tc.expected_output if tc else None)
+            if expected:
+                console.print(f"[dim]Expected:[/dim]")
+                console.print(f"  {expected}\n")
+
+            # Scores row
+            scores = []
+            if r.similarity_score is not None:
+                scores.append(f"similarity={r.similarity_score:.2f}")
+            if r.judge_score is not None:
+                scores.append(f"judge={r.judge_score:.2f}")
+            if r.latency_ms:
+                scores.append(f"latency={r.latency_ms:.0f}ms")
+            if scores:
+                console.print(f"[dim]{' · '.join(scores)}[/dim]")
+
+            # Judge reasoning
+            if r.judge_reasoning:
+                console.print(f"[dim]Judge reasoning:[/dim] [italic]{r.judge_reasoning}[/italic]")
+
+            console.print()
+
+        passed = sum(1 for r in eval_results if r.passed)
+        total = len(eval_results)
+        color = "green" if passed == total else "yellow" if passed > 0 else "red"
+        console.print(f"[bold]Summary:[/bold] [{color}]{passed}/{total} passed[/{color}]")
+
+    finally:
+        repo.close()
+
+
 def _print_sparkline(values: list, label: str):
     """Print a simple ASCII sparkline."""
     if not values:

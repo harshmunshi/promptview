@@ -21,6 +21,8 @@ dependencies = [
 [project.optional-dependencies]
 langfuse = ["langfuse>=2.0"]
 langsmith = ["langsmith>=0.1"]
+s3 = ["boto3>=1.28"]
+gcs = ["google-cloud-storage>=2.10"]
 all = ["promptview[langfuse,langsmith]"]
 
 [project.scripts]

@@ -11,6 +11,11 @@ def scan_command(
     path: str = typer.Argument(".", help="Directory to scan"),
     min_confidence: float = typer.Option(0.5, "--min-confidence", "-c"),
     show_all: bool = typer.Option(False, "--show-all", help="Show low-confidence hits too"),
+    fail_on_untracked: bool = typer.Option(
+        False,
+        "--fail-on-untracked",
+        help="Exit with code 1 if any discovered prompts are not yet staged/committed",
+    ),
 ) -> None:
     """Scan the codebase for LLM prompts."""
     root = Path(path).resolve()
@@ -32,6 +37,8 @@ def scan_command(
 
     if not results:
         warn("No prompts found.")
+        if fail_on_untracked:
+            console.print("[green]✓ No prompts found — nothing untracked.[/green]")
         return
 
     from rich.table import Table
@@ -58,3 +65,36 @@ def scan_command(
         )
     console.print(table)
     info(f"\nRun [cyan]promptview add .[/cyan] to stage all discovered prompts.")
+
+    if fail_on_untracked:
+        # Determine which discovered prompts are untracked (not staged or committed)
+        untracked = []
+        if repo.is_initialized():
+            repo.open()
+            try:
+                status = repo.status(scanned_prompts=results)
+                untracked = status.get("untracked", [])
+            finally:
+                repo.close()
+        else:
+            # Repo not initialized — every discovered prompt is untracked
+            untracked = list(results)
+
+        if untracked:
+            console.print(
+                "\n[red]✗ The following prompts are untracked (not staged or committed):[/red]"
+            )
+            for sp in untracked:
+                console.print(
+                    f"  [red]•[/red] [cyan]{sp.variable_name}[/cyan]"
+                    f"  ({sp.file_path}:{sp.line_number})"
+                )
+            console.print(
+                "\n[red]Run [cyan]pv add .[/cyan][red] then [cyan]pv commit[/cyan]"
+                "[red] to version these prompts.[/red]"
+            )
+            raise typer.Exit(1)
+        else:
+            console.print(
+                "\n[green]✓ All discovered prompts are tracked.[/green]"
+            )
